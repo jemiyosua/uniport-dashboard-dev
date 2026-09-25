@@ -59,9 +59,8 @@ tetap terbuka. `api/akses/dekrip.js` menjadi fungsi serverless `POST /api/akses/
 
 **Halaman admin `/admin`** (`api/akses/portal.js`) menampilkan tautan permanen keempat portal dengan tombol Buka dan
 Salin. Halaman ini **terbuka tanpa kata sandi**, jadi siapa pun yang tahu alamatnya bisa masuk ke semua portal.
-Untuk menguncinya, isi Environment Variable `ADMIN_SANDI`. Halaman lalu meminta Basic Auth (nama pengguna bebas,
-kata sandi = `ADMIN_SANDI`). Isi **Environment Variable
-`AKSES_KUNCI`** di proyek Vercel dengan nilai yang sama seperti di `.env` lokal. Kalau nilainya berbeda, tautan buatan
+
+Isi **Environment Variable `AKSES_KUNCI`** di proyek Vercel dengan nilai yang sama seperti di `.env` lokal. Kalau nilainya berbeda, tautan buatan
 `npm run link` akan ditolak. Isi juga `PORTAL_URL=https://uniport-dashboard-dev.vercel.app/` di `.env` lokal supaya
 `npm run link` langsung membuat tautan ke Vercel.
 

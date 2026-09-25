@@ -46,6 +46,14 @@ Untuk build yang dibuka dari server lain, `npm run api` menjalankan layanan dekr
 hierarki di atas baru ditegakkan di tampilan. Agar benar-benar aman, API produksi harus mengembalikan **hanya data dalam
 cakupan** hasil decrypt, bukan sekadar peran.
 
+## Deploy ke Vercel
+
+`vercel.json` mengarahkan semua path selain `/api/…` ke `index.html`, jadi `/direksi`, `/pinwil`, dan seterusnya
+tetap terbuka. `api/akses/dekrip.js` menjadi fungsi serverless `POST /api/akses/dekrip`. Isi **Environment Variable
+`AKSES_KUNCI`** di proyek Vercel dengan nilai yang sama seperti di `.env` lokal. Kalau nilainya berbeda, tautan buatan
+`npm run link` akan ditolak. Isi juga `PORTAL_URL=https://uniport-dashboard-dev.vercel.app/` di `.env` lokal supaya
+`npm run link` langsung membuat tautan ke Vercel.
+
 ## API backend Go (Matrix)
 
 Frontend memanggil backend Go lewat `/api-go/…`. Dev server meneruskannya ke `URL_GO` di `.env`, karena backend tidak

@@ -6,10 +6,17 @@
 //
 // Token disimpan di sessionStorage (bukan hasil decrypt-nya) lalu dihapus dari address
 // bar, supaya tidak ikut ter-screenshot atau tersalin; saat refresh token diverifikasi ulang.
-import { akarAkses, type Cakupan, type Peran } from './agregasi';
+//
+// Path tautan memberi label portal (/direksi, /pinwil, /pincab, /marketing) supaya mudah dikenali,
+// tetapi PERAN tetap ditentukan token. Path yang tidak cocok dengan peran di token ditolak
+// ('salah-portal'); path tanpa label (mis. / atau index.html) tetap diterima.
+import { akarAkses, peranDariPath, type Cakupan, type Peran } from './agregasi';
 
 export interface Akses { peran: Peran; unitId: string; akar: Cakupan }
-export type HasilAkses = { ok: true; akses: Akses } | { ok: false; alasan: 'tanpa-token' | 'ditolak' | 'tak-terjangkau' };
+export type HasilAkses =
+  | { ok: true; akses: Akses }
+  | { ok: false; alasan: 'tanpa-token' | 'ditolak' | 'tak-terjangkau' }
+  | { ok: false; alasan: 'salah-portal'; peranToken: Peran; peranPath: Peran };
 
 const KUNCI_SIMPAN = 'uniport-akses';
 const API = (import.meta.env.VITE_API_AKSES ?? '/api').replace(/\/$/, '');
@@ -52,5 +59,10 @@ export async function periksaAkses(): Promise<HasilAkses> {
   // Token sah secara kriptografis tetapi unitnya tidak dikenal / tidak cocok dengan perannya → tolak juga.
   const akar = isi?.peran && isi.unitId ? akarAkses(isi.peran, isi.unitId) : null;
   if (!akar) { lupakanToken(); return { ok: false, alasan: 'ditolak' }; }
+  // Token tetap disimpan: pengguna yang salah mengetik path cukup kembali ke portalnya.
+  const peranPath = peranDariPath(window.location.pathname);
+  if (peranPath && peranPath !== isi!.peran) {
+    return { ok: false, alasan: 'salah-portal', peranToken: isi!.peran as Peran, peranPath };
+  }
   return { ok: true, akses: { peran: isi!.peran as Peran, unitId: isi!.unitId!, akar } };
 }

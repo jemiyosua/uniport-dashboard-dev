@@ -10,6 +10,11 @@ import { fileURLToPath } from 'node:url';
 
 export const PERAN_SAH = ['direksi', 'pemimpin-wilayah', 'pimpinan-cabang', 'marketing-officer'];
 
+/** Segmen path tautan per peran; samakan dengan PERAN[…].portal di src/logika/agregasi.ts. */
+export const PORTAL_PERAN = {
+  direksi: 'direksi', 'pemimpin-wilayah': 'pinwil', 'pimpinan-cabang': 'pincab', 'marketing-officer': 'marketing',
+};
+
 /** Muat .env sederhana (Node 18 belum punya --env-file). Variabel yang sudah ada di environment menang. */
 export function muatEnv() {
   const berkas = fileURLToPath(new URL('../.env', import.meta.url));
@@ -64,10 +69,11 @@ export const CONTOH_PORTAL = [
   { label: 'Marketing Officer', ket: 'Novita Lubis', peran: 'marketing-officer', unitId: 'MO0561' },
 ];
 
-/** Tautan portal `<dasar>?akses=<token>` yang berlaku `hari` hari. */
+/** Tautan portal `<dasar>/<portal>?akses=<token>` (mis. …/pinwil?akses=…) yang berlaku `hari` hari. */
 export function buatTautan(peran, unitId, hari, dasar, kunci) {
   const token = enkrip({ p: peran, u: unitId, exp: Math.floor(Date.now() / 1000) + Number(hari) * 86400 }, kunci);
-  const url = new URL(dasar);
+  // Dasar tanpa garis miring akhir (https://host/uniport) tetap diperlakukan sebagai folder.
+  const url = new URL(PORTAL_PERAN[peran], new URL(dasar).href.replace(/\/?$/, '/'));
   url.searchParams.set('akses', token);
   return url.toString();
 }

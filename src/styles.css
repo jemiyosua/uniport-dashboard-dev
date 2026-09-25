@@ -553,6 +553,7 @@ details summary h2 { font-size: 22px; }
 .akses-kartu h1 { font-size: 24px; letter-spacing: -0.01em; }
 .akses-kartu p { font-size: 16px; line-height: 1.5; }
 .akses-kartu .tombol { margin-top: 6px; }
+.akses-kartu a.tombol { text-decoration: none; }
 .akses-peragaan { width: 100%; display: grid; gap: 8px; margin-top: 8px; padding-top: 16px; border-top: 1px dashed var(--garis); }
 .akses-peragaan p { font-size: 14px; }
 .akses-peragaan ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }

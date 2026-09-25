@@ -13,12 +13,19 @@ export interface Cakupan { tingkat: Tingkat; id: string }
 export const NASIONAL: Cakupan = { tingkat: 'nasional', id: 'NAS' };
 
 export type Peran = 'direksi' | 'pemimpin-wilayah' | 'pimpinan-cabang' | 'marketing-officer';
-export const PERAN: Record<Peran, { label: string; tingkat: Tingkat }> = {
-  direksi: { label: 'Direksi', tingkat: 'nasional' },
-  'pemimpin-wilayah': { label: 'Pemimpin Wilayah', tingkat: 'kanwil' },
-  'pimpinan-cabang': { label: 'Pimpinan Cabang', tingkat: 'cabang' },
-  'marketing-officer': { label: 'Marketing Officer', tingkat: 'mo' },
+/** `portal` = segmen path tautan akses (/pinwil?akses=…); samakan dengan PORTAL_PERAN di tools/lib-akses.mjs. */
+export const PERAN: Record<Peran, { label: string; tingkat: Tingkat; portal: string }> = {
+  direksi: { label: 'Direksi', tingkat: 'nasional', portal: 'direksi' },
+  'pemimpin-wilayah': { label: 'Pemimpin Wilayah', tingkat: 'kanwil', portal: 'pinwil' },
+  'pimpinan-cabang': { label: 'Pimpinan Cabang', tingkat: 'cabang', portal: 'pincab' },
+  'marketing-officer': { label: 'Marketing Officer', tingkat: 'mo', portal: 'marketing' },
 };
+
+/** Peran yang dituju segmen terakhir path (…/pincab → pimpinan-cabang); null bila path bukan portal peran. */
+export function peranDariPath(pathname: string): Peran | null {
+  const segmen = pathname.replace(/\/+$/, '').split('/').pop()?.toLowerCase() ?? '';
+  return (Object.keys(PERAN) as Peran[]).find((p) => PERAN[p].portal === segmen) ?? null;
+}
 
 const petaKanwil = new Map(DATA.kanwil.map((k) => [k.id, k]));
 const petaCabang = new Map(DATA.cabang.map((c) => [c.id, c]));

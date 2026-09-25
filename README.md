@@ -12,7 +12,8 @@ npm run typecheck
 
 ## Akses portal lewat tautan terenkripsi
 
-Tidak ada login/logout. Setiap pengguna membuka portal lewat tautan `…/?akses=<token>`. Frontend mengirim token ke
+Tidak ada login/logout. Setiap pengguna membuka portal lewat tautan `…/<portal>?akses=<token>`, misalnya
+`…/pinwil?akses=…`. Frontend mengirim token ke
 API (`POST /api/akses/dekrip`), dan API men-decrypt token itu (AES-256-GCM, kunci `AKSES_KUNCI` di `.env`, **hanya di
 server**) menjadi `{ peran, unitId }`. Token yang diubah, palsu, atau kedaluwarsa ditolak dengan 401.
 
@@ -21,17 +22,23 @@ cp .env.example .env && npm run kunci   # salin baris AKSES_KUNCI=… ke .env
 npm run dev                             # dev server sekaligus melayani /api/akses/dekrip
 npm run link                            # tautan contoh untuk keempat portal
 npm run link -- pemimpin-wilayah KW2 7  # tautan untuk unit tertentu, berlaku 7 hari
+npm run link -- direksi NAS 30 https://portal.internal/uniport   # → https://portal.internal/uniport/direksi?akses=…
 ```
+
+Segmen path (`/direksi`, `/pinwil`, `/pincab`, `/marketing`) hanya label agar tautan mudah dikenali. **Peran tetap
+ditentukan token.** Kalau path tidak cocok dengan peran di token (misalnya token Pimpinan Cabang dibuka di `/direksi`),
+portal menolak dan menawarkan tombol ke portal yang benar. Path tanpa label (`/`, `index.html`) tetap diterima. Server
+produksi harus melayani `index.html` untuk keempat path itu (SPA fallback), sama seperti yang dilakukan dev server.
 
 Saat `npm run dev`, halaman tanpa tautan menampilkan tombol peragaan untuk keempat portal (hanya di dev server,
 tidak ikut ke build). `VITE_AKSES_TAUTAN=mati` membuka URL langsung sebagai portal Direksi, khusus pengembangan.
 
-| Portal | `unitId` | Data yang bisa dibuka | Menu | Cari (⌘K) | Ekspor posisi |
-| --- | --- | --- | --- | --- | --- |
-| Direksi | `NAS` | Semua Kantor Wilayah, cabang, dan MO | Semua | Ya | Ya |
-| Pemimpin Wilayah | `KW1`… | Cabang dan MO di wilayahnya | Semua | Ya | Ya |
-| Pimpinan Cabang | `KW3-C04`… | MO di cabangnya | Semua | Ya | Ya |
-| Marketing Officer | `MO0561`… | Data miliknya sendiri | Dashboard, Perlu Tindakan, Renewal, Ritme Kerja, Detail | Tidak | Tidak |
+| Portal | Path | `unitId` | Data yang bisa dibuka | Menu | Cari (⌘K) | Ekspor posisi |
+| --- | --- | --- | --- | --- | --- | --- |
+| Direksi | `/direksi` | `NAS` | Semua Kantor Wilayah, cabang, dan MO | Semua | Ya | Ya |
+| Pemimpin Wilayah | `/pinwil` | `KW1`… | Cabang dan MO di wilayahnya | Semua | Ya | Ya |
+| Pimpinan Cabang | `/pincab` | `KW3-C04`… | MO di cabangnya | Semua | Ya | Ya |
+| Marketing Officer | `/marketing` | `MO0561`… | Data miliknya sendiri | Dashboard, Perlu Tindakan, Renewal, Ritme Kerja, Detail | Tidak | Tidak |
 
 Cakupan data diatur `dalamAkar` (`src/logika/agregasi.ts`); menu dan fitur per peran diatur `src/logika/izin.ts`.
 Untuk build yang dibuka dari server lain, `npm run api` menjalankan layanan dekrip yang sama di `:8787`

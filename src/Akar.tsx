@@ -27,6 +27,6 @@ function AkarTautan() {
   }, []);
 
   if (!hasil) return <MemeriksaAkses />;
-  if (!hasil.ok) return <AksesGagal alasan={hasil.alasan} />;
+  if (!hasil.ok) return <AksesGagal hasil={hasil} />;
   return <App akses={hasil.akses} />;
 }

@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Ikon } from '../components/Ikon';
+import { PERAN, type Peran } from '../logika/agregasi';
 import type { HasilAkses } from '../logika/akses';
 
-type Gagal = Extract<HasilAkses, { ok: false }>['alasan'];
+type HasilGagal = Extract<HasilAkses, { ok: false }>;
+type Gagal = Exclude<HasilGagal['alasan'], 'salah-portal'>;
 
 const PESAN: Record<Gagal, { judul: string; isi: string }> = {
   'tanpa-token': {
@@ -40,7 +42,12 @@ export function MemeriksaAkses() {
   );
 }
 
-export function AksesGagal({ alasan }: { alasan: Gagal }) {
+/** Path saat ini dengan segmen portal diganti ke portal peran lain (…/pinwil → …/direksi). */
+const pathPortal = (peran: Peran) => window.location.pathname.replace(/[^/]*\/*$/, PERAN[peran].portal);
+
+export function AksesGagal({ hasil }: { hasil: HasilGagal }) {
+  if (hasil.alasan === 'salah-portal') return <SalahPortal peranToken={hasil.peranToken} peranPath={hasil.peranPath} />;
+  const { alasan } = hasil;
   const p = PESAN[alasan];
   return (
     <div className="akses">
@@ -53,6 +60,23 @@ export function AksesGagal({ alasan }: { alasan: Gagal }) {
           <button type="button" className="tombol utama" onClick={() => window.location.reload()}>Muat ulang</button>
         )}
         {import.meta.env.DEV && alasan !== 'tak-terjangkau' && <TautanPeragaan />}
+      </div>
+      <p className="login-kaki">Rahasia internal · Asuransi Sinar Mas</p>
+    </div>
+  );
+}
+
+function SalahPortal({ peranToken, peranPath }: { peranToken: Peran; peranPath: Peran }) {
+  return (
+    <div className="akses">
+      <div className="akses-kartu" role="alert">
+        <Merek />
+        <span className="akses-ikon waspada"><Ikon nama="lock" ukuran={26} /></span>
+        <h1>Bukan portal Anda</h1>
+        <p className="teks-redup">
+          Alamat ini untuk portal {PERAN[peranPath].label}, sedangkan tautan Anda untuk portal {PERAN[peranToken].label}.
+        </p>
+        <a className="tombol utama" href={pathPortal(peranToken)}>Buka portal {PERAN[peranToken].label}</a>
       </div>
       <p className="login-kaki">Rahasia internal · Asuransi Sinar Mas</p>
     </div>

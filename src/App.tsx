@@ -1,0 +1,232 @@
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { KELOMPOK_KANAL, TAHUN_BERJALAN } from './config/dashboard';
+import { FilterUnit } from './components/FilterUnit';
+import { kodeKanwilApi, type ParameterFilterApi } from './api/matrix';
+import { Kartu } from './components/Kartu';
+import { Ikon } from './components/Ikon';
+import { PilihPeriode } from './components/PilihPeriode';
+import { Sidebar, type GrupMenu } from './components/Sidebar';
+import { Topbar } from './components/Topbar';
+import {
+  cabangAdaData, dalamAkar, jalur, kodeCabangApi, kodeMOApi, moAdaData, labelFilter, alihGrup, alihSubKanal, FILTER_SEMUA, grupAktif, posisiCakupan, wilayahAdaData, labelPeriode, namaCakupan, PERAN, PERIODE_PENUH, type Cakupan, type FilterKanal, type Periode,
+} from './logika/agregasi';
+import type { Akses } from './logika/akses';
+import { bolehHalaman, IZIN } from './logika/izin';
+import { eksporDaftarKerja, eksporPosisi } from './logika/csv';
+import { hitungDasbor } from './logika/dasbor';
+import { tanggalPanjang } from './logika/format';
+import { renewalMendesak } from './pages/bagian/Renewal';
+import { Tampilan } from './pages/Tampilan';
+
+type Tema = 'terang' | 'gelap';
+
+// localStorage bisa diblokir (mode privat, file://) — selalu dibungkus try/catch.
+const simpan = {
+	baca: (k: string) => { try { return localStorage.getItem(k); } catch { return null; } },
+	tulis: (k: string, v: string) => { try { localStorage.setItem(k, v); } catch { /* abaikan */ } },
+};
+
+// Setiap menu = satu halaman, dialamatkan lewat hash (#/kinerja) supaya tombol Back
+// browser berfungsi dan tetap jalan saat dibuka lewat file:// tanpa server.
+const JUDUL_HALAMAN: Record<string, string> = {
+	ringkasan: 'Ringkasan',
+	tindakan: 'Perlu Tindakan',
+	renewal: 'Renewal',
+	proyeksi: 'Proyeksi Pencapaian Target',
+	kinerja: 'Kinerja',
+	insight: 'AI Insight', 'orang-kunci': 'Ketergantungan Orang Kunci',
+	ditanyakan: 'Perlu Ditanyakan',
+	ritme: 'Ritme Kerja',
+	detail: 'Detail & Latar Belakang',
+};
+const halamanDariHash = () => window.location.hash.replace(/^#\/?/, '') || 'ringkasan';
+
+
+export default function App({ akses }: { akses: Akses }) {
+  // Tema dipilih manual, tidak mengikuti setelan sistem (kondisi layar ruang rapat beragam).
+  const [tema, setTema] = useState<Tema>(() => (simpan.baca('uniport-tema') === 'gelap' ? 'gelap' : 'terang'));
+  // Peran & unit ditentukan tautan akses (hasil decrypt API) — tidak bisa diganti dari tampilan.
+  const { peran, akar } = akses;
+  const izin = IZIN[peran];
+  const [cakupan, setCakupan] = useState<Cakupan>(akar);
+  const [filter, setFilter] = useState<FilterKanal>(FILTER_SEMUA);
+  const [ciut, setCiut] = useState(() => simpan.baca('uniport-ciut') === '1');
+  const [menuTerbuka, setMenuTerbuka] = useState(false);
+  const [halamanHash, setHalamanHash] = useState(halamanDariHash);
+  const [menuEkspor, setMenuEkspor] = useState(false);
+  const [periode, setPeriode] = useState<Periode>(PERIODE_PENUH);
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = tema === 'gelap' ? 'dark' : 'light';
+    simpan.tulis('uniport-tema', tema);
+  }, [tema]);
+  useEffect(() => simpan.tulis('uniport-ciut', ciut ? '1' : '0'), [ciut]);
+
+  const d = useMemo(() => hitungDasbor(cakupan, filter, periode), [cakupan, filter, periode]);
+  // Wilayah yang hanya ada di API (mis. Agency Development) belum punya data lokal.
+  const belumAdaData = (cakupan.tingkat === 'kanwil' && !wilayahAdaData(cakupan.id))
+    || (cakupan.tingkat === 'cabang' && !cabangAdaData(cakupan.id))
+    || (cakupan.tingkat === 'mo' && !moAdaData(cakupan.id));
+
+  // Parameter filter yang nanti dikirim ke API data setiap kali filter berubah.
+  // TODO: sambungkan ke endpoint data backend Go begitu tersedia.
+  const parameterApi = useMemo<ParameterFilterApi>(() => {
+    const pos = posisiCakupan(cakupan);
+    return {
+      kanwil: pos.kanwilId ? kodeKanwilApi(pos.kanwilId) : undefined,
+      cabang: pos.cabangId ? kodeCabangApi(pos.cabangId) ?? pos.cabangId : undefined,
+      mo: pos.moId ? kodeMOApi(pos.moId) ?? pos.moId : undefined,
+      channel: filter.length ? [...filter] : undefined,
+      bulanDari: periode.dari + 1, bulanSampai: periode.sampai + 1, tahun: TAHUN_BERJALAN,
+    };
+  }, [cakupan, filter, periode]);
+  useEffect(() => { if (import.meta.env.DEV) console.debug('[filter → API]', parameterApi); }, [parameterApi]);
+  // Halaman Detail & Latar berisi dokumentasi statis — filter, ekspor, dan pita sifat data tidak relevan di sana.
+  const halamanDetail = halamanHash === 'detail';
+  // Alamat halaman yang tidak dikenal atau tidak diizinkan untuk peran ini kembali ke Ringkasan.
+  const halaman = bolehHalaman(peran, halamanHash) ? halamanHash : 'ringkasan';
+
+  useEffect(() => {
+    const f = () => setHalamanHash(halamanDariHash());
+    window.addEventListener('hashchange', f);
+    return () => window.removeEventListener('hashchange', f);
+  }, []);
+  useEffect(() => { window.scrollTo({ top: 0 }); }, [halaman, cakupan]);
+
+  // Turun/naik jenjang tetap di halaman yang sama (mis. Kinerja Kanwil → Kinerja Cabang).
+  // Unit di luar hierarki portal ini (mis. cabang lain bagi Pimpinan Cabang) ditolak.
+  const buka = useCallback((c: Cakupan) => { if (dalamAkar(akar, c)) setCakupan(c); }, [akar]);
+
+  const ke = useCallback((id: string) => {
+    setMenuTerbuka(false);
+    if (!bolehHalaman(peran, id)) return;
+    if (halamanDariHash() === id) return;
+    window.location.hash = `/${id}`;
+    setHalamanHash(id);
+  }, [peran]);
+
+  const mendesak = d.jt.lewat.jumlah + d.jt.hariIni.jumlah;
+  // Menu mengikuti izin peran (logika/izin.ts), sama untuk semua tingkat filter.
+  // Angka di samping menu mengikuti data yang sedang difilter.
+  const grup: GrupMenu[] = ([
+    { judul: 'Menu utama', item: [
+      { id: 'ringkasan', label: 'Dashboard', ikon: 'grid' },
+      { id: 'tindakan', label: 'Perlu Tindakan', ikon: 'alert', lencana: mendesak },
+      { id: 'renewal', label: 'Renewal', ikon: 'refresh', lencana: renewalMendesak(d) },
+      { id: 'proyeksi', label: 'Proyeksi Target', ikon: 'target' },
+      { id: 'kinerja', label: 'Kinerja', ikon: 'chart' },
+      { id: 'ritme', label: 'Ritme Kerja', ikon: 'activity' },
+      { id: 'insight', label: 'AI Insight', ikon: 'sparkle', lencana: d.insight.length },
+    ] },
+    { judul: 'Orang', item: [
+      { id: 'orang-kunci', label: 'Orang Kunci', ikon: 'users', lencana: d.konsentrasi.length },
+      { id: 'ditanyakan', label: 'Perlu Ditanyakan', ikon: 'userQ', lencana: d.ditanyakan.length },
+    ] },
+    { judul: 'Umum', item: [{ id: 'detail', label: 'Detail & Latar', ikon: 'help' }] },
+  ] satisfies GrupMenu[])
+    .map((g) => ({ ...g, item: g.item.filter((x) => bolehHalaman(peran, x.id)) }))
+    .filter((g) => g.item.length > 0);
+
+  const ekspor = () => { eksporDaftarKerja(d.nama, d.prioritas); setMenuEkspor(false); };
+  const eksporPos = () => { if (izin.eksporPosisi) eksporPosisi(d.nama, d.anak, labelPeriode(periode)); setMenuEkspor(false); };
+  const remah = jalur(cakupan, akar);
+
+  const props = {
+    halaman, d, filter, onFilter: setFilter, onBuka: buka, onKe: ke, onEkspor: ekspor, onEksporPosisi: eksporPos,
+  };
+
+  return (
+    <div className={`kerangka ${ciut ? 'menu-ciut' : ''}`}>
+      <Sidebar
+        grup={grup} aktif={halaman} onPilih={ke} ciut={ciut} onCiut={() => setCiut(!ciut)}
+        terbuka={menuTerbuka} onTutup={() => setMenuTerbuka(false)} onSumberData={() => ke('detail')}
+      />
+      <div className="kolom-utama">
+        <Topbar
+          peran={peran} namaUnit={namaCakupan(akar)} akar={akar} onBuka={buka} bisaCari={izin.cari}
+          tema={tema} onTema={() => setTema(tema === 'terang' ? 'gelap' : 'terang')}
+          mendesak={mendesak} onMendesak={() => ke('tindakan')} onBantuan={() => ke('detail')} onMenu={() => setMenuTerbuka(true)}
+        />
+        <main className="panel-isi">
+          <div className="kepala-halaman">
+            <div>
+              <nav className="remah" aria-label="Jenjang">
+                {remah.map((c, i) => (
+                  <span key={c.tingkat + c.id}>
+                    {i > 0 && <Ikon nama="chevronRight" ukuran={14} />}
+                    {i < remah.length - 1
+                      ? <button type="button" className="tautan" onClick={() => buka(c)}>{namaCakupan(c)}</button>
+                      : <span aria-current="page">{namaCakupan(c)}</span>}
+                  </span>
+                ))}
+              </nav>
+              <h1>{halaman !== 'ringkasan' ? JUDUL_HALAMAN[halaman] : cakupan.tingkat === akar.tingkat ? `Selamat datang kembali, ${peran === 'marketing-officer' ? namaCakupan(akar) : PERAN[peran].label}` : d.nama}</h1>
+              <p className="teks-redup">
+                {halamanDetail ? 'Sumber data, koreksi periode, asumsi, dan kepatuhan.' : <>
+                  Posisi {d.nama} · produksi {labelPeriode(periode, true)}
+                  {filter.length > 0 && <> · channel <strong>{labelFilter(filter)}</strong></>}
+                </>}
+              </p>
+            </div>
+            <div className="kepala-aksi-halaman">
+              {halamanDetail
+                ? <span className="chip-tanggal"><Ikon nama="calendar" ukuran={18} /> {tanggalPanjang(new Date())}</span>
+                : <PilihPeriode periode={periode} onUbah={setPeriode} />}
+              {!halamanDetail && <div className="ekspor">
+                <button type="button" className="tombol gelap" onClick={() => setMenuEkspor(!menuEkspor)} aria-expanded={menuEkspor}>
+                  <Ikon nama="upload" ukuran={18} /> Export <Ikon nama="chevronDown" ukuran={16} />
+                </button>
+                {menuEkspor && (
+                  <div className="menu-tarik" role="menu">
+                    <button type="button" role="menuitem" onClick={ekspor}>Daftar kerja (CSV)</button>
+                    {izin.eksporPosisi && d.anak.length > 0 && <button type="button" role="menuitem" onClick={eksporPos}>Posisi {d.labelAnak} (CSV)</button>}
+                  </div>
+                )}
+              </div>}
+            </div>
+          </div>
+
+          {!halamanDetail && <FilterUnit akar={akar} cakupan={cakupan} onBuka={buka} />}
+
+          {!halamanDetail && (
+            <div className="filter-kanal" role="toolbar" aria-label="Filter channel">
+              <span className="teks-redup"><Ikon nama="filter" ukuran={16} /> Channel</span>
+              <button
+                type="button" aria-pressed={filter.length === 0}
+                className={`chip-filter induk ${filter.length === 0 ? 'aktif' : ''}`} onClick={() => setFilter(FILTER_SEMUA)}
+              >Semua</button>
+              {(['Direct', 'Captive'] as const).map((k) => (
+                <span className="grup-kanal" key={k} role="group" aria-label={`Channel ${k}`}>
+                  <button
+                    type="button" aria-pressed={grupAktif(filter, k)}
+                    className={`chip-filter induk ${grupAktif(filter, k) ? 'aktif' : ''}`} onClick={() => setFilter(alihGrup(filter, k))}
+                  >Semua {k}</button>
+                  {KELOMPOK_KANAL[k].map((s) => (
+                    <button
+                      type="button" key={s} aria-pressed={filter.includes(s)}
+                      className={`chip-filter sub ${filter.includes(s) ? 'aktif' : ''}`} onClick={() => setFilter(alihSubKanal(filter, s))}
+                    >{filter.includes(s) && <Ikon nama="check" ukuran={14} />}{s}</button>
+                  ))}
+                </span>
+              ))}
+            </div>
+          )}
+
+          {belumAdaData && !halamanDetail ? (
+            <Kartu className="data-kosong">
+              <span className="akses-ikon waspada"><Ikon nama="info" ukuran={26} /></span>
+              <h2>Data {d.nama} belum tersedia</h2>
+              <p className="teks-redup">
+                Unit ini terdaftar di API <code>{cakupan.tingkat === 'mo' ? 'matrix/marketings' : cakupan.tingkat === 'cabang' ? 'matrix/branches' : 'matrix/kanwils'}</code>, tetapi datanya belum dimuat ke dashboard.
+                Data akan diambil dari API sesuai filter begitu endpoint datanya tersedia.
+              </p>
+              <button type="button" className="tombol sekunder" onClick={() => buka(akar)}>Kembali ke {namaCakupan(akar)}</button>
+            </Kartu>
+          ) : <Tampilan {...props} />}
+
+          <footer className="kaki">Uniport Executive Dashboard · prototipe peragaan · Asuransi Sinar Mas</footer>
+        </main>
+      </div>
+    </div>
+  );
+}

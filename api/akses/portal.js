@@ -19,5 +19,5 @@ export default function handler(req, res) {
   const daftar = CONTOH_PORTAL.map((c) => ({ ...c, url: buatTautan(c.peran, c.unitId, 0, dasar, kunci) }));
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
   res.setHeader('Referrer-Policy', 'no-referrer');
-  res.status(200).send(halamanAkses(daftar, null));
+  res.status(200).send(halamanAkses(daftar));
 }

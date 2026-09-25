@@ -23,6 +23,6 @@ if (peran) {
 
   // Halaman lokal untuk membuka/menyalin keempat tautan (tidak ikut git, lihat .gitignore).
   const berkas = fileURLToPath(new URL('../akses-portal.html', import.meta.url));
-  writeFileSync(berkas, halamanAkses(daftar, Number(hari) > 0 ? new Date(Date.now() + Number(hari) * 86400_000) : null), { mode: 0o600 });
+  writeFileSync(berkas, halamanAkses(daftar), { mode: 0o600 });
   console.log(`Halaman tautan: ${berkas}`);
 }

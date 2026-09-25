@@ -1,6 +1,7 @@
 // Fungsi serverless Vercel: GET /admin (rewrite di vercel.json) → halaman tautan keempat portal.
-// Dilindungi HTTP Basic Auth: pengguna bebas, kata sandi = Environment Variable ADMIN_SANDI.
-// Halaman ini membuka semua portal (termasuk Direksi), jadi tanpa ADMIN_SANDI endpoint ini menolak semua.
+// Terbuka tanpa kata sandi. Halaman ini membuka semua portal (termasuk Direksi) selamanya, jadi siapa pun
+// yang tahu alamatnya bisa masuk. Untuk menguncinya, isi Environment Variable ADMIN_SANDI: halaman lalu
+// meminta HTTP Basic Auth (pengguna bebas, kata sandi = ADMIN_SANDI).
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { halamanAkses } from '../../tools/halaman-akses.mjs';
 import { ambilKunci, buatTautan, CONTOH_PORTAL } from '../../tools/lib-akses.mjs';
@@ -21,8 +22,7 @@ export default function handler(req, res) {
   const teks = (kode, pesan) => { res.setHeader('Content-Type', 'text/plain; charset=utf-8'); res.status(kode).send(pesan); };
 
   const sandi = process.env.ADMIN_SANDI;
-  if (!sandi) return teks(503, 'Halaman admin belum dikonfigurasi (ADMIN_SANDI kosong).');
-  if (!sandiCocok(req.headers.authorization, sandi)) {
+  if (sandi && !sandiCocok(req.headers.authorization, sandi)) {
     console.warn(`[admin] kata sandi salah/kosong dari ${req.headers['x-forwarded-for'] ?? 'tidak diketahui'}`);
     res.setHeader('WWW-Authenticate', 'Basic realm="Uniport Admin", charset="UTF-8"');
     return teks(401, 'Masukkan kata sandi admin.');

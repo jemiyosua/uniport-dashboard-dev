@@ -2,7 +2,8 @@
 // Jangan pernah di-import dari src/: kuncinya tidak boleh ikut ke browser.
 //
 // Format token: base64url( iv[12] | ciphertext | authTag[16] ), AES-256-GCM.
-// Isi token (JSON): { p: peran, u: unitId, exp: detik-epoch }.
+// Isi token (JSON): { p: peran, u: unitId, exp?: detik-epoch }. Tanpa `exp` = berlaku selamanya;
+// token seperti itu hanya bisa dicabut dengan mengganti AKSES_KUNCI (semua tautan ikut batal).
 // GCM sekaligus menjamin keaslian: token yang diubah satu karakter pun gagal didekrip.
 import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
@@ -45,7 +46,7 @@ export function enkrip(isi, kunci) {
   return Buffer.concat([iv, data, c.getAuthTag()]).toString('base64url');
 }
 
-/** Mengembalikan { peran, unitId, exp } atau melempar Error bila token rusak/palsu/kedaluwarsa. */
+/** Mengembalikan { peran, unitId, exp } (exp null = selamanya) atau melempar Error bila token rusak/palsu/kedaluwarsa. */
 export function dekrip(token, kunci) {
   const buf = Buffer.from(String(token), 'base64url');
   if (buf.length < 12 + 16 + 2) throw new Error('token rusak');
@@ -54,8 +55,8 @@ export function dekrip(token, kunci) {
   d.setAuthTag(tag);
   const isi = JSON.parse(Buffer.concat([d.update(data), d.final()]).toString('utf8'));
   if (!PERAN_SAH.includes(isi.p) || typeof isi.u !== 'string') throw new Error('isi token tidak sah');
-  if (typeof isi.exp !== 'number' || isi.exp * 1000 < Date.now()) throw new Error('token kedaluwarsa');
-  return { peran: isi.p, unitId: isi.u, exp: isi.exp };
+  if (isi.exp !== undefined && (typeof isi.exp !== 'number' || isi.exp * 1000 < Date.now())) throw new Error('token kedaluwarsa');
+  return { peran: isi.p, unitId: isi.u, exp: isi.exp ?? null };
 }
 
 /**
@@ -69,9 +70,14 @@ export const CONTOH_PORTAL = [
   { label: 'Marketing Officer', ket: 'Novita Lubis', peran: 'marketing-officer', unitId: 'MO0561' },
 ];
 
-/** Tautan portal `<dasar>/<portal>?akses=<token>` (mis. …/pinwil?akses=…) yang berlaku `hari` hari. */
+/**
+ * Tautan portal `<dasar>/<portal>?akses=<token>` (mis. …/pinwil?akses=…) yang berlaku `hari` hari;
+ * `hari` kosong/0 = berlaku selamanya.
+ */
 export function buatTautan(peran, unitId, hari, dasar, kunci) {
-  const token = enkrip({ p: peran, u: unitId, exp: Math.floor(Date.now() / 1000) + Number(hari) * 86400 }, kunci);
+  const isi = { p: peran, u: unitId };
+  if (Number(hari) > 0) isi.exp = Math.floor(Date.now() / 1000) + Number(hari) * 86400;
+  const token = enkrip(isi, kunci);
   // Dasar tanpa garis miring akhir (https://host/uniport) tetap diperlakukan sebagai folder.
   const url = new URL(PORTAL_PERAN[peran], new URL(dasar).href.replace(/\/?$/, '/'));
   url.searchParams.set('akses', token);
@@ -81,7 +87,7 @@ export function buatTautan(peran, unitId, hari, dasar, kunci) {
 /**
  * Penangan POST /api/akses/dekrip untuk server Node biasa maupun middleware dev server Vite.
  *   body: { "token": "<token dari tautan>" }
- *   200 → { "peran": "...", "unitId": "...", "exp": 1790000000 }
+ *   200 → { "peran": "...", "unitId": "...", "exp": 1790000000 | null }
  *   401 → { "galat": "..." } bila token rusak, palsu, atau kedaluwarsa.
  * `asal` = daftar origin yang boleh memanggil langsung (CORS); kosong = hanya dari origin yang sama.
  */

@@ -4,6 +4,7 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "rewrites": [
+    { "source": "/admin", "destination": "/api/akses/portal" },
     { "source": "/((?!api/).*)", "destination": "/index.html" }
   ]
 }

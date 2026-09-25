@@ -15,15 +15,21 @@ npm run typecheck
 Tidak ada login/logout. Setiap pengguna membuka portal lewat tautan `…/<portal>?akses=<token>`, misalnya
 `…/pinwil?akses=…`. Frontend mengirim token ke
 API (`POST /api/akses/dekrip`), dan API men-decrypt token itu (AES-256-GCM, kunci `AKSES_KUNCI` di `.env`, **hanya di
-server**) menjadi `{ peran, unitId }`. Token yang diubah, palsu, atau kedaluwarsa ditolak dengan 401.
+server**) menjadi `{ peran, unitId }`. Token yang diubah, palsu, atau kedaluwarsa ditolak dengan 401. Secara bawaan token
+**tidak pernah kedaluwarsa**. Satu-satunya cara mencabutnya adalah mengganti `AKSES_KUNCI`, dan semua tautan ikut batal.
 
 ```bash
 cp .env.example .env && npm run kunci   # salin baris AKSES_KUNCI=… ke .env
 npm run dev                             # dev server sekaligus melayani /api/akses/dekrip
-npm run link                            # tautan contoh untuk keempat portal
-npm run link -- pemimpin-wilayah KW2 7  # tautan untuk unit tertentu, berlaku 7 hari
+npm run link                            # tautan contoh keempat portal + halaman akses-portal.html
+npm run link -- pemimpin-wilayah KW2    # tautan untuk unit tertentu, berlaku selamanya
+npm run link -- pemimpin-wilayah KW2 7  # … atau hanya 7 hari
 npm run link -- direksi NAS 30 https://portal.internal/uniport   # → https://portal.internal/uniport/direksi?akses=…
 ```
+
+`npm run link` juga menulis `akses-portal.html`, halaman lokal dengan tombol **Buka portal** dan **Salin tautan** untuk
+keempat portal. Berkas itu setara kunci masuk semua portal, jadi sudah dikecualikan di `.gitignore`. Jangan di-commit
+atau di-deploy.
 
 Segmen path (`/direksi`, `/pinwil`, `/pincab`, `/marketing`) hanya label agar tautan mudah dikenali. **Peran tetap
 ditentukan token.** Kalau path tidak cocok dengan peran di token (misalnya token Pimpinan Cabang dibuka di `/direksi`),
@@ -49,7 +55,11 @@ cakupan** hasil decrypt, bukan sekadar peran.
 ## Deploy ke Vercel
 
 `vercel.json` mengarahkan semua path selain `/api/…` ke `index.html`, jadi `/direksi`, `/pinwil`, dan seterusnya
-tetap terbuka. `api/akses/dekrip.js` menjadi fungsi serverless `POST /api/akses/dekrip`. Isi **Environment Variable
+tetap terbuka. `api/akses/dekrip.js` menjadi fungsi serverless `POST /api/akses/dekrip`.
+
+**Halaman admin `/admin`** (`api/akses/portal.js`) menampilkan tautan permanen keempat portal dengan tombol Buka dan
+Salin. Halaman ini dilindungi Basic Auth: nama pengguna bebas, kata sandinya diambil dari Environment Variable
+**`ADMIN_SANDI`**. Kalau `ADMIN_SANDI` kosong, halaman menolak semua akses. Isi **Environment Variable
 `AKSES_KUNCI`** di proyek Vercel dengan nilai yang sama seperti di `.env` lokal. Kalau nilainya berbeda, tautan buatan
 `npm run link` akan ditolak. Isi juga `PORTAL_URL=https://uniport-dashboard-dev.vercel.app/` di `.env` lokal supaya
 `npm run link` langsung membuat tautan ke Vercel.
